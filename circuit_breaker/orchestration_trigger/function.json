@@ -8,7 +8,6 @@
       "direction": "in",
       "route": "orchestrators/{functionName}",
       "methods": [
-        "post",
         "get"
       ]
     },
