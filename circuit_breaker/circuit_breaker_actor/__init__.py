@@ -1,30 +1,26 @@
 import logging
 import os
-from datetime import datetime, time, timedelta
-
+from datetime import datetime, timedelta
 import azure.durable_functions as df
-
-
-def crate_circuit_breaker():
-    d = {
-        "status": "Closed",
-        "failure_window": [],
-        "open_until": None,
-        "success_count": 0
-    }
-    return d
-
 
 def entity_function(context: df.DurableEntityContext):
     """A Counter Durable Entity."""
 
+    d = {
+        "status": "Closed",
+        "failure_count": [],
+        "open_until": None,
+        "success_count": 0
+    }
+
     THREASHOLD_COUNTS = int(os.environ.get('THREASHOLD_COUNTS', 10))
     TIMESPAN_SECONDS = int(os.environ.get('TIMESPAN_SECONDS_SECONDS', 30))
     OPEN_DURATION_MINUTES = int(os.environ.get('OPEN_DURATION_MINUTES', 3))
+    SUCCESS_COUNTS = int(os.environ.get('SUCCESS_COUNTS', 5))
 
     logging.info(
         f'Set THREASHOLD_COUNTS is {THREASHOLD_COUNTS} and TIMESPAN_SECONDS is {TIMESPAN_SECONDS}.')
-    current_values = context.get_state(crate_circuit_breaker)
+    current_values = context.get_state(lambda: d)
     operation = context.operation_name
     current_utc = datetime.utcnow()
     current_utc_str = datetime.strftime(current_utc, '%Y-%m-%dT%H:%M:%S')
@@ -35,7 +31,7 @@ def entity_function(context: df.DurableEntityContext):
                 current_values['open_until'], '%Y-%m-%dT%H:%M:%S')
             if current_utc > open_until:
                 current_values['status'] = 'HalfOpen'
-                current_values['failure_window'] = list()
+                current_values['failure_count'] = list()
                 current_values['open_until'] = None
                 logging.info(f'Status changed to {current_values["status"]}')
                 context.set_state(current_values)
@@ -52,7 +48,7 @@ def entity_function(context: df.DurableEntityContext):
         elif operation == 'reset':
             new_values = {
                 'status': 'Closed',
-                'failure_window': [],
+                'failure_count': [],
                 'open_until': None,
                 'success_count': 0
             }
@@ -62,32 +58,29 @@ def entity_function(context: df.DurableEntityContext):
 
         elif operation == "count_failure":
             logging.info('Evaluate if the status should be changed.')
-            current_values['failure_window'].append(current_utc_str)
+            current_values['failure_count'].append(current_utc_str)
             # Exclude after theshold.
             sp = current_utc - timedelta(seconds=TIMESPAN_SECONDS)
             current_failures = [
-                v for v in current_values['failure_window']
+                v for v in current_values['failure_count']
                 if datetime.strptime(v, '%Y-%m-%dT%H:%M:%S') > sp
             ]
             current_count = len(current_failures)
 
             new_values = {
                 'status': current_values['status'],
-                'failure_window': current_failures,
+                'failure_count': current_failures,
                 'open_until': None,
                 'success_count': 0
             }
 
             # Update status and open_until
             if current_count >= THREASHOLD_COUNTS:
-
                 logging.info(f'Current Failed count is greater than {THREASHOLD_COUNTS}')
-
                 open_until = current_utc + \
                     timedelta(minutes=int(OPEN_DURATION_MINUTES))
                 open_until_str = datetime.strftime(
                     open_until, '%Y-%m-%dT%H:%M:%S')
-
                 logging.info(f'{context.entity_key} is Open until {open_until_str}')
 
                 new_values['status'] = 'Open'
@@ -104,10 +97,10 @@ def entity_function(context: df.DurableEntityContext):
             if current_values['status'] == 'HalfOpen':
                 logging.info(f'Current status is {current_values["status"]}')
                 current_values['success_count'] += 1
-                if current_values['success_count'] >= 5:
+                if current_values['success_count'] >= SUCCESS_COUNTS:
                     new_values = {
                         "status": "Closed",
-                        "failure_window": [],
+                        "failure_count": [],
                         "open_until": None,
                         "success_count": 0
                     }
