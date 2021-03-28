@@ -1,16 +1,20 @@
+// Call backend with status server_error
 GET http://localhost:7071/api/call_backend?entity_key=debugentity&status=server_error
 
 ###
+// Call backend with status ok
 GET http://localhost:7071/api/call_backend?entity_key=debugentity&status=ok
 
 ###
-GET http://localhost:7071/api/check_status
+// Call circuit breaker
+GET http://localhost:7072/api/orchestrators/read_circuit_status_orchestrator?entity_key=testbreaker
 
 ###
-GET http://localhost:7072/api/orchestrators/read_circuit_status_orchestrator?entity_key=testbreaker HTTP/1.1
-
-###
+// Get Current State with durable entity  and its key
 GET  http://localhost:7072/runtime/webhooks/durabletask/entities/circuit_breaker_actor/debugentity
+
+###
+POST  http://localhost:7072/runtime/webhooks/durabletask/entities/circuit_breaker_actor/debugentity?op=get
 
 ###
 POST  http://localhost:7072/runtime/webhooks/durabletask/entities/circuit_breaker_actor/debugentity?op=reset
@@ -20,6 +24,3 @@ POST  http://localhost:7072/runtime/webhooks/durabletask/entities/circuit_breake
 
 ###
 POST  http://localhost:7072/runtime/webhooks/durabletask/entities/circuit_breaker_actor/debugentity?op=count_success
-
-###
-POST  http://localhost:7072/runtime/webhooks/durabletask/entities/circuit_breaker_actor/debugentity?op=get
